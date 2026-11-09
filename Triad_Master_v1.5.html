@@ -482,6 +482,37 @@ input[type=range].vol-slider::-webkit-slider-thumb {
 
 .key.white.pressed[data-role], .key.black.pressed[data-role] { filter: brightness(0.8); }
 
+/* ═══════════════════════════════════════
+   초보 모드: 켜짐 표시 버튼 + 구성음 외 건반 회색
+═══════════════════════════════════════ */
+.beginner-btn {
+  padding: 11px 24px;
+  border-radius: 9px;
+  border: 2px solid rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.12);
+  color: #dfe8f0;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.beginner-btn:hover  { background: rgba(255,255,255,0.24); }
+.beginner-btn:active { transform: translateY(2px); }
+.beginner-btn.active {
+  background: linear-gradient(135deg, #ffd23f, #f0a800);
+  border-color: #fff3b0;
+  color: #2a1800;
+  box-shadow: 0 0 18px rgba(255,200,40,0.8), inset 0 1px 0 rgba(255,255,255,0.45);
+}
+.beginner-btn.active::before { content: '✓ '; }
+
+#piano-keyboard.beginner-active .key:not([data-chord]) { cursor: not-allowed; }
+#piano-keyboard.beginner-active .key.white:not([data-chord]) { background: #adafb3 !important; }
+#piano-keyboard.beginner-active .key.black:not([data-chord]) { background: #6c6f74 !important; }
+#piano-keyboard.beginner-active .key:not([data-chord]) .solfege-badge { opacity: 0.45; }
+
 /* 안내 창 둘째 줄: 비어 있으면 숨기고, 켜진 화음의 색으로 표시 */
 .lcd-line2:empty { display: none; }
 .lcd-line2[data-chord="1"] { color: #1550d0; }
@@ -526,6 +557,7 @@ input[type=range].vol-slider::-webkit-slider-thumb {
     <button class="chord-btn chord-btn-4" id="btn-chord-4" onclick="selectChord(4)">4도 화음</button>
     <button class="chord-btn chord-btn-5" id="btn-chord-5" onclick="selectChord(5)">5도 화음</button>
   </div>
+  <button class="beginner-btn" id="btn-beginner" aria-pressed="false" onclick="toggleBeginner()">초보</button>
   <button class="reset-btn" onclick="resetAll()">초기화</button>
 </div>
 
@@ -675,6 +707,7 @@ let keyConfirmed      = false;          // true면 건반은 연주 전용
 let activeChord       = null;           // 1 | 4 | 5 | null
 let currentInstrument = 'classic';
 let labelMode         = 'solfege';      // 'solfege' | 'number'
+let beginnerMode      = false;          // 초기화해도 유지
 
 /* ════════════════════════════════════════════════
    음악 계산
@@ -751,6 +784,7 @@ function renderChord() {
   });
   [1, 4, 5].forEach(c =>
     document.getElementById(`btn-chord-${c}`).classList.toggle('active', c === activeChord));
+  keyboard.classList.toggle('beginner-active', beginnerMode && activeChord !== null);
   if (!activeChord) return;
 
   const degrees = CHORD_DEGREES[activeChord];
@@ -763,6 +797,31 @@ function renderChord() {
     keyEl.dataset.chord = activeChord;
     keyEl.dataset.role  = (pc === rootPc) ? 'root' : 'tone';
   });
+  silenceMutedKeys();
+}
+
+// 초보 모드에서 화음이 켜져 있으면 색이 없는(회색) 건반은 소리를 내지 않음
+function isMuted(noteName) {
+  return beginnerMode && activeChord !== null
+      && !document.getElementById(`key-${noteName}`).dataset.chord;
+}
+
+// 누르고 있던 건반이 화음 변경으로 회색이 되면 바로 멈춤
+function silenceMutedKeys() {
+  keyboard.querySelectorAll('.key.pressed').forEach(k => {
+    const noteName = k.id.replace('key-', '');
+    if (!isMuted(noteName)) return;
+    stopNote(noteName);
+    k.classList.remove('pressed');
+  });
+}
+
+function toggleBeginner() {
+  beginnerMode = !beginnerMode;
+  const btn = document.getElementById('btn-beginner');
+  btn.classList.toggle('active', beginnerMode);
+  btn.setAttribute('aria-pressed', String(beginnerMode));
+  renderChord();
 }
 
 function renderLcd() {
@@ -888,8 +947,8 @@ const instPresets = {
 async function playNote(noteName) {
   ensureAudio();
   if (audioCtx.state !== 'running') await audioCtx.resume();
-  // resume을 기다리는 사이 손가락을 뗐다면 재생하지 않음 (멈추지 않는 음 방지)
-  if (!isHeld(noteName)) return;
+  // resume을 기다리는 사이 손가락을 뗐거나 건반이 회색이 됐다면 재생하지 않음 (멈추지 않는 음 방지)
+  if (!isHeld(noteName) || isMuted(noteName)) return;
   if (activeVoices[noteName]) stopNote(noteName);
 
   const note = ALL_NOTES.find(n => n.name === noteName);
@@ -972,13 +1031,19 @@ window.addEventListener('pointerdown', async e => {
   if (!keyConfirmed) confirmKey(noteBase(noteName));
 
   activePointers.set(e.pointerId, noteName);
-  keyEl.classList.add('pressed');
   // setPointerCapture 대신 releasePointerCapture로 포인터를 자유롭게 풀어
   // → pointermove 시 elementFromPoint 추적이 정확하게 작동
   try { keyEl.setPointerCapture(e.pointerId); } catch (err) {}
   try { keyEl.releasePointerCapture(e.pointerId); } catch (err) {}
-  await playNote(noteName);
+  await pressKey(keyEl, noteName);
 }, { passive: false });
+
+// 회색 건반은 눌린 표시도 소리도 없음. 포인터 추적은 유지되어 글리산도로 색 건반에 들어가면 소리가 남.
+async function pressKey(keyEl, noteName) {
+  if (isMuted(noteName)) return;
+  keyEl.classList.add('pressed');
+  await playNote(noteName);
+}
 
 window.addEventListener('pointermove', e => {
   if (!activePointers.has(e.pointerId)) return;
@@ -990,8 +1055,7 @@ window.addEventListener('pointermove', e => {
     if (prev !== nname) {
       activePointers.set(e.pointerId, nname);
       if (prev) silenceIfFree(prev);
-      keyEl.classList.add('pressed');
-      playNote(nname);
+      pressKey(keyEl, nname);
     }
   } else {
     // 건반 밖(스크롤바, 여백 등)으로 나가면 소리 정지, 포인터 추적 유지

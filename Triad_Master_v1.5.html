@@ -558,7 +558,7 @@ input[type=range].vol-slider::-webkit-slider-thumb {
     <button class="chord-btn chord-btn-5" id="btn-chord-5" onclick="selectChord(5)">5도 화음</button>
   </div>
   <button class="beginner-btn" id="btn-beginner" aria-pressed="false" onclick="toggleBeginner()">초보</button>
-  <button class="reset-btn" onclick="resetAll()">초기화</button>
+  <button class="reset-btn" onclick="resetAll()">조바꿈</button>
 </div>
 
 <!-- 피아노 프레임 -->
@@ -700,14 +700,17 @@ const KEY_SIG_IMAGES = {
    상태
 ════════════════════════════════════════════════ */
 const DEFAULT_TONIC = 'C';
-const PROMPT_CHOOSE_KEY = ['현재는 다장조입니다.', '(조를 바꾸고 싶으면 원하는 조의 으뜸음을 눌러주세요.)'];
+// 처음 켰을 때 / '조바꿈' 버튼을 누른 뒤 안내문
+const PROMPT_START      = ['현재는 다장조입니다.', "(조를 바꾸시려면 '조바꿈' 버튼을 누르고 으뜸음을 누르세요.)"];
+const PROMPT_KEY_CHANGE = ['새 조의 으뜸음 건반을 누르세요.', '(누르기 전까지는 다장조입니다.)'];
 
 let tonic             = DEFAULT_TONIC;  // 샵 표기의 건반 이름
 let keyConfirmed      = false;          // true면 건반은 연주 전용
 let activeChord       = null;           // 1 | 4 | 5 | null
 let currentInstrument = 'classic';
 let labelMode         = 'solfege';      // 'solfege' | 'number'
-let beginnerMode      = false;          // 초기화해도 유지
+let beginnerMode      = false;          // 조바꿈해도 유지
+let keyChangePending  = false;          // '조바꿈'을 누르고 으뜸음을 기다리는 중
 
 /* ════════════════════════════════════════════════
    음악 계산
@@ -827,7 +830,7 @@ function toggleBeginner() {
 function renderLcd() {
   const line2 = document.getElementById('lcd-line2');
   if (!keyConfirmed) {
-    setLcd(...PROMPT_CHOOSE_KEY);
+    setLcd(...(keyChangePending ? PROMPT_KEY_CHANGE : PROMPT_START));
     delete line2.dataset.chord;
     return;
   }
@@ -854,11 +857,12 @@ function renderAll() {
 }
 
 /* ════════════════════════════════════════════════
-   조 선택 · 화음 버튼 · 초기화
+   조 선택 · 화음 버튼 · 조바꿈
 ════════════════════════════════════════════════ */
 function confirmKey(base) {
   tonic = base;
   keyConfirmed = true;
+  keyChangePending = false;
   renderAll();
 }
 
@@ -866,13 +870,16 @@ function confirmKey(base) {
 // 조를 고르기 전에 누르면 기본값인 다장조로 확정.
 function selectChord(chord) {
   keyConfirmed = true;
+  keyChangePending = false;
   activeChord  = chord;
   renderAll();
 }
 
+// '조바꿈' 버튼: 색을 지우고 다장조로 돌아가 새 으뜸음을 기다림
 function resetAll() {
   tonic        = DEFAULT_TONIC;
   keyConfirmed = false;
+  keyChangePending = true;
   activeChord  = null;
   renderAll();
 

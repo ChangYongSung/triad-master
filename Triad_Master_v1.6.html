@@ -515,7 +515,8 @@ input[type=range].vol-slider::-webkit-slider-thumb {
 #piano-keyboard.beginner-active .key:not([data-chord]) { cursor: not-allowed; }
 #piano-keyboard.beginner-active .key.white:not([data-chord]) { background: #d9dbde !important; }
 #piano-keyboard.beginner-active .key.black:not([data-chord]) { background: #a2a5aa !important; }
-#piano-keyboard.beginner-active .key:not([data-chord]) .solfege-badge { opacity: 0.45; }
+/* 초보 모드: 화음 밖 계이름·숫자는 보일락 말락하게 */
+#piano-keyboard.beginner-active .key:not([data-chord]) .solfege-badge { opacity: 0.15; }
 
 /* 안내 창 둘째 줄: 비어 있으면 숨기고, 켜진 화음의 색으로 표시 */
 .lcd-line2:empty { display: none; }
@@ -606,7 +607,7 @@ input[type=range].vol-slider::-webkit-slider-thumb {
     </div>
     <div class="label-row">
       <button class="label-btn" id="btn-label-num"    onclick="toggleLabelMode('number')">숫자</button>
-      <button class="label-btn active" id="btn-label-solfege" onclick="toggleLabelMode('solfege')">계이름(이동)</button>
+      <button class="label-btn" id="btn-label-solfege" onclick="toggleLabelMode('solfege')">계이름(이동)</button>
       <button class="label-btn" id="btn-label-fixed" onclick="toggleLabelMode('fixed')">계이름(고정)</button>
       <span style="color:rgba(255,255,255,0.35); font-size:18px; font-weight:100; margin: 0 6px; line-height:1;">|</span>
       <button class="label-btn" id="btn-notename" onclick="toggleNoteName()">음이름</button>
@@ -709,13 +710,14 @@ const KEY_SIG_IMAGES = {
 const DEFAULT_TONIC = 'C';
 // 처음 켰을 때 / '조바꿈' 버튼을 누른 뒤 안내문
 const PROMPT_START      = ['현재는 다장조입니다.', "(조를 바꾸시려면 '조바꿈' 버튼을 누르고 으뜸음을 누르세요.)"];
+const KEY_CHANGE_HINT   = "(조를 바꾸시려면 '조바꿈' 버튼을 누른 후 으뜸음을 누르세요.)";
 const PROMPT_KEY_CHANGE = ['새 조의 으뜸음 건반을 누르세요.', '(누르기 전까지는 다장조입니다.)'];
 
 let tonic             = DEFAULT_TONIC;  // 샵 표기의 건반 이름
-let keyConfirmed      = false;          // true면 건반은 연주 전용
+let keyConfirmed      = true;           // 처음부터 다장조로 확정 → 계이름·숫자 뱃지가 바로 보임. '조바꿈'을 누르면 false
 let activeChord       = null;           // 1 | 4 | 5 | null
 let currentInstrument = 'classic';
-let labelMode         = 'solfege';      // 'solfege'(이동도) | 'number' | 'fixed'(고정도) | null
+let labelMode         = null;           // 'solfege'(이동도) | 'number' | 'fixed'(고정도) | null. 처음엔 꺼짐 → 버튼을 눌러야 뱃지가 보임
 let beginnerMode      = false;          // 조바꿈해도 유지
 let keyChangePending  = false;          // '조바꿈'을 누르고 으뜸음을 기다리는 중
 
@@ -858,7 +860,8 @@ function renderLcd() {
   } else {
     delete line2.dataset.chord;
   }
-  setLcd(`${keyTitle()}입니다. 1도·4도·5도 버튼을 눌러 보세요`, chordText);
+  // 화음을 고르기 전에는 둘째 줄에 조바꿈 방법을 안내
+  setLcd(`${keyTitle()}입니다. 1도·4도·5도 버튼을 눌러 보세요`, chordText || KEY_CHANGE_HINT);
 }
 
 function renderAll() {
